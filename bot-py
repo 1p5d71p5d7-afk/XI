@@ -1,0 +1,59 @@
+import os import time import requests
+BOT_TOKEN = os.environ["BOT_TOKEN"] BEARER_TOKEN = os.environ["BEARER_TOKEN"] CHAT_ID = os.environ["CHAT_ID"]
+HEADERS = { "Authorization": f"Bearer {BEARER_TOKEN}" }
+last_post_id = None
+def get_man_utd_id(): url = "https://api.x.com/2/users/by/username/ManUtd" r = requests.get(url, headers=HEADERS) r.raise_for_status() return r.json()["data"]["id"]
+def get_latest_posts(user_id): url = f"https://api.x.com/2/users/{user_id}/tweets" params = { "max_results": 5, "expansions": "attachments.media_keys", "media.fields": "url,type", "tweet.fields": "created_at,text" }
+r = requests.get(url, headers=HEADERS, params=params)
+r.raise_for_status()
+return r.json()
+def send_photo(photo_url): url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+requests.post(
+    url,
+    data={
+        "chat_id": CHAT_ID,
+        "photo": photo_url
+    }
+)
+def main(): global last_post_id
+print("Bot started...")
+
+user_id = get_man_utd_id()
+
+while True:
+    try:
+        data = get_latest_posts(user_id)
+        posts = data.get("data", [])
+
+        if posts:
+            post = posts[0]
+
+            if last_post_id is None:
+                last_post_id = post["id"]
+
+            elif post["id"] != last_post_id:
+                last_post_id = post["id"]
+
+                text = post.get("text", "").lower()
+
+                keywords = [
+                    "lineup",
+                    "starting xi",
+                    "starting eleven",
+                    "team news"
+                ]
+
+                if any(word in text for word in keywords):
+                    media = data.get("includes", {}).get("media", [])
+
+                    for item in media:
+                        if item.get("type") == "photo":
+                            send_photo(item["url"])
+                            print("Lineup image sent!")
+
+        time.sleep(60)
+
+    except Exception as e:
+        print("Error:", e)
+        time.sleep(60)
+if name == "main": main()
